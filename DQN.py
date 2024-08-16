@@ -11,6 +11,9 @@ class DQN:
         #DQN e-Greedy
         self.discount_factor = D["discount_factor"]
         self.learning_rate = D["learning_rate"]
+        self.action_space = D["action_space"]
+        self.n_actions = D["n_actions"]
+        self.state_shape = D["state_shape"]
         self.epsilon_max = D["epsilon_max"]
         self.epsilon_min = D["epsilon_min"]
         self.epsilon = self.epsilon_max
@@ -20,8 +23,11 @@ class DQN:
         #DQN network
         self.policy_net = None
         self.target_net = None
-        self.network_hidden_layers_dim = None
-        self.n_layers = None
+        self.n_inputs = self.state_shape
+        self.n_hidden_layer_1 = None
+        self.n_hidden_layer_2 = None
+        self.n_hidden_layer_3 = None
+        self.n_outputs = self.n_actions
         self.activation_function = None 
         self.loss_function = None
         self.optimizer = None
@@ -35,11 +41,9 @@ class DQN:
 
     def SetNNParameters(self, parameters_dictionary):
         D = parameters_dictionary
-        self.n_inputs = D["n_inputs"]
         self.n_hidden_layer_1 = D["n_hidden_layer_1"]
         self.n_hidden_layer_2 = D["n_hidden_layer_2"]
         self.n_hidden_layer_3 = D["n_hidden_layer_3"]
-        self.n_outputs = D["n_outputs"]
         self.activation_function = D["activation_function"]
         self.loss_function = D["loss_function"]
 
@@ -94,6 +98,7 @@ class DQN:
         return action
 
     def Q_Action(state):
+        pdb.set_trace()
         #Convert state to tensor
         state_tensor = None
         #Convert to matrix of 1 colum

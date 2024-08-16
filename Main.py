@@ -11,6 +11,14 @@ print("Libraries Imported")
 # Control Panel
 #======================================================
 
+#Initialize Enviroment
+game_name = "LunarLander-v2"
+env = gym.make(game_name)
+observation_space = env.observation_space
+action_space = env.action_space
+status_shape = observation_space.shape
+
+
 # Episodes
 human_render = False
 max_episodes = 5000
@@ -22,6 +30,9 @@ human_render_after_episodes = 500
 DQN_Parameters = {
     "discount_factor": 4,
     "learning_rate": 0.05,
+    "action_space": action_space,
+    "n_actions": action_space.n,
+    "state_shape": observation_space.shape[0],
     "epsilon_max": 1,
     "epsilon_min": 0.05,
     "epsilon_max_exploration_steps": 100000.0,
@@ -49,11 +60,9 @@ N_inputs = observation_space.shape[0]
 
 # Neural Net Parameters dictionary
 NN_Parameters = {
-    "n_inputs": N_inputs,
     "n_hidden_layer_1": 20,
     "n_hidden_layer_2": 10,
     "n_hidden_layer_3": 0,
-    "n_outputs": N_actions,
     "activation_function": "relu", # relu, tanh, sigmoid, leaky_relu  
     "loss_function": nn.SmoothL1Loss(),
     }
@@ -81,7 +90,9 @@ for ep in range(max_episodes):
     episode_reward = 0
     for t in range(episode_time_steps):
         frame_count += 1
-        action = np.random.choice(N_actions)
+        dqn.EpsilonCalc()
+        dqn.RandomAction()
+        
         
 
         #Apply the action in enviroment
