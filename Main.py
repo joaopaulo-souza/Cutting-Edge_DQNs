@@ -110,7 +110,10 @@ for ep in range(max_episodes):
         state = next_state
 
         #Update Policy Net
-        dqn.UpdatePolicyNet(frame_count)            
+        dqn.UpdatePolicyNet(frame_count)
+
+        #Update Target Net
+        dqn.UpdateTargetNet(frame_count)
                 
     # Update running reward to check condition for solving
     episode_count += 1
@@ -118,10 +121,8 @@ for ep in range(max_episodes):
     episode_reward_history.append(episode_reward)
     if len(episode_reward_history) > 100:
         del episode_reward_history[:1]
-    running_reward = episode_reward_history[-1]
 
-
-    if running_reward > episode_solution:  # Condition to consider the task solved
+    if episode_reward > episode_solution:  # Condition to consider the task solved
         print("Solved at episode {}!".format(episode_count))
         break
 

@@ -105,7 +105,7 @@ class DQN:
             #Convert to matrix of 1 colum
             state_tensor = state_tensor.unsqueeze(0)
             #Calculate the Q-values
-            Q_actions = self.network(state_tensor)
+            Q_actions = self.policy_net(state_tensor)
             #Take the best action
             action = torch.argmax(Q_actions).item()
         return action
@@ -117,7 +117,6 @@ class DQN:
 
     def UpdatePolicyNet(self,frame_count):
         if frame_count % self.update_policy_net_steps ==0 and len(self.experience_replay) > self.batch_size:
-            pdb.set_trace()
             indices = np.random.choice(range(len(self.experience_replay)), size = self.batch_size)
             exp_batch = [self.experience_replay[i] for i in indices]
 
@@ -162,8 +161,9 @@ class DQN:
             self.optimizer.step()
             
 
-    def UpdateTargetNet(self):
-        self.target_net.load_state_dict(self.policy_net.state_dict())
+    def UpdateTargetNet(self, frame_count):
+        if frame_count % self.update_target_net_steps == 0:
+            self.target_net.load_state_dict(self.policy_net.state_dict())
         
 
 
