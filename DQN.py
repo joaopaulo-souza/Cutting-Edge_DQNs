@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 
 import numpy as np
@@ -13,6 +14,7 @@ class DQN:
         self.learning_rate = D["learning_rate"]
         self.action_space = D["action_space"]
         self.n_actions = D["n_actions"]
+        self.action_space = D["action_space"]
         self.state_shape = D["state_shape"]
         self.epsilon_max = D["epsilon_max"]
         self.epsilon_min = D["epsilon_min"]
@@ -69,7 +71,7 @@ class DQN:
                 nn.Linear(self.n_hidden_layer_2, self.n_hidden_layer_3),
                 activation,
                 nn.Linear(self.n_hidden_layer_3, self.n_outputs),
-                nn.Softmax()
+                nn.Softmax(dim=1)
                 )
         else:
             model = nn.Sequential(
@@ -78,84 +80,87 @@ class DQN:
                 nn.Linear(self.n_hidden_layer_1, self.n_hidden_layer_2),
                 activation,
                 nn.Linear(self.n_hidden_layer_2, self.n_outputs),
-                nn.Softmax()
+                nn.Softmax(dim=1)
                 )
         return model
 
     def CreateQnets(self):
         self.policy_net = self.CreateNN()
         self.target_net = self.CreateNN()
-        #pdb.set_trace()
         self.optimizer = optim.Adam(self.policy_net.parameters(),lr=self.learning_rate)
 
-    def EpsilonCalc(self):
+    def E_GreedyPolicy(self, state):
+        #Compute epsilon
         self.epsilon -= self.epsilon_decay
         self.epsilon = max(self.epsilon,self.epsilon_min)
-        return self.epsilon
-
-    def RandomAction(self):
-        action = np.random.choice(self.action_space)
+        #Calculate de probability of exploration
+        p_exploration = np.random.uniform()
+        if p_exploration < self.epsilon:
+            #take random action
+            action = np.random.choice(self.action_space)
+        else:
+            #take calculated action
+            #Convert state to tensor
+            state_tensor = torch.tensor(state)
+            #Convert to matrix of 1 colum
+            state_tensor = state_tensor.unsqueeze(0)
+            #Calculate the Q-values
+            Q_actions = self.network(state_tensor)
+            #Take the best action
+            action = torch.argmax(Q_actions).item()
         return action
 
-    def Q_Action(state):
-        pdb.set_trace()
-        #Convert state to tensor
-        state_tensor = None
-        #Convert to matrix of 1 colum
-        state_tensor = None
-        #Calculate the Q-values
-        Q_actions = self.network(state_tensor)
-        #Take the best action
-        action = None
-
     def AddToReplay(self, experience):
-        self.replay_experience.append(experience)
+        self.experience_replay.append(experience)
         if len(self.experience_replay) > self.experience_replay_length:
-            del Exp_replay[:1]
+            del self.experience_replay[:1]
 
-    def UpdatePolicyNet(self):
-        indices = np.random.choice(range(len(self.experience_replay)), size = self.batch_size)
-        exp_batch = [self.experience_replay[i] for i in indices]
+    def UpdatePolicyNet(self,frame_count):
+        if frame_count % self.update_policy_net_steps ==0 and len(self.experience_replay) > self.batch_size:
+            pdb.set_trace()
+            indices = np.random.choice(range(len(self.experience_replay)), size = self.batch_size)
+            exp_batch = [self.experience_replay[i] for i in indices]
 
-        state_sample = np.array([exp_replay[i][0] for i in exp_batch])
-        action_sample = [exp_replay[i][1] for i in exp_batch]
-        rewards_sample = [exp_replay[i][2] for i in exp_batch]
-        next_state_sample = np.array([exp_replay[i][3] for i in exp_batch])
-        done_sample = tf.convert_to_tensor([float(exp_replay[i][4]) for i in exp_batch])
-        
-        if self.double_dqn == True:
-            #Double DQN
-            future_Q_values = DQN(next_state_sample)
-            future_action = tf.math.argmax(future_Q_values, axis = 1)
-            future_Q_target_values = DQN_T(next_state_sample)
-            masks = tf.one_hot(future_action,N_actions)
-            future_Q_target_actions = tf.math.reduce_sum((future_Q_target_values * masks), axis=1)
-                
-            updated_Q_values = rewards_sample + gamma * future_Q_target_actions
-
-        else:
-            #Simple DQN
-            future_Q_values = DQN_T(next_state_sample)
-            updated_Q_values = rewards_sample + gamma * tf.reduce_max(future_Q_values, axis = 1)
-
-        #Done samples
-        updated_Q_values = updated_Q_values * (1 - done_sample) - done_sample
-        #Create a mask so we can calculate loss
-        masks = tf.one_hot(action_sample,N_actions)
-
-        # Train the model on the states and updated Q-values
-        Q_values = DQN(state_sample)
+            state_sample = torch.stack([torch.tensor(exp[0]) for exp in exp_batch])
+            action_sample = torch.tensor([exp[1] for exp in exp_batch])
+            rewards_sample = torch.tensor([exp[2] for exp in exp_batch])
+            next_state_sample = torch.stack([torch.tensor(exp[3]) for exp in exp_batch])
+            done_sample = torch.tensor([float(exp[4]) for exp in exp_batch])
+            
+            if self.double_dqn_flag == True: 
+                #Double DQN
+                future_Q_values = self.policy_net(next_state_sample)
+                future_action = tf.math.argmax(future_Q_values, axis = 1)
+                future_Q_target_values = DQN_T(next_state_sample)
+                masks = tf.one_hot(future_action,N_actions)
+                future_Q_target_actions = tf.math.reduce_sum((future_Q_target_values * masks), axis=1)
                     
-        # Apply the masks to the Q-values to get the Q-value for action taken
-        Q_action = tf.math.reduce_sum((Q_values * masks), axis=1)
-                    
-        # Calculate loss between new Q-value and old Q-value
-        loss = self.loss_function(updated_Q_values, Q_action)
+                updated_Q_values = rewards_sample + gamma * future_Q_target_actions
 
-        #Back Propagation
-        self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
+            else:
+                #Simple DQN
+                future_Q_values = self.target_net(next_state_sample)
+                updated_Q_values = rewards_sample + self.discount_factor * torch.max(future_Q_values,dim=1)[0]
+
+            #Done samples ( If the state is terminal, set to -1)
+            updated_Q_values = updated_Q_values * (1 - done_sample) - done_sample
+            #Create a mask so we can calculate loss ( will do One Hot Encoding in actions)
+            masks = F.one_hot(action_sample, self.n_actions)
+
+            # Train the model on the states and updated Q-values
+            Q_values = self.policy_net(state_sample)
+                        
+            # Apply the masks to the Q-values to get the Q-value for action taken
+            Q_action = torch.sum((Q_values * masks), dim=1)
+                        
+            # Calculate loss between new Q-value (updated usnig Bell's eq.) and old Q-value (policy_net)
+            loss = self.loss_function(updated_Q_values, Q_action)
+
+            #Back Propagation
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+            
 
     def UpdateTargetNet(self):
         self.target_net.load_state_dict(self.policy_net.state_dict())

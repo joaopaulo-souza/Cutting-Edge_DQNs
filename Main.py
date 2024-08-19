@@ -14,8 +14,9 @@ print("Libraries Imported")
 #Initialize Enviroment
 game_name = "LunarLander-v2"
 env = gym.make(game_name)
-observation_space = env.observation_space
-action_space = env.action_space
+observation_space = env.observation_space 
+n_actions = env.action_space.n  #Use only for discrete action space
+action_space = tuple([i for i in range(n_actions)])
 status_shape = observation_space.shape
 
 
@@ -30,8 +31,8 @@ human_render_after_episodes = 500
 DQN_Parameters = {
     "discount_factor": 4,
     "learning_rate": 0.05,
+    "n_actions": n_actions,
     "action_space": action_space,
-    "n_actions": action_space.n,
     "state_shape": observation_space.shape[0],
     "epsilon_max": 1,
     "epsilon_min": 0.05,
@@ -42,9 +43,9 @@ DQN_Parameters = {
     "update_target_net_steps": 10,
 
     "experience_replay_length": 100000,
-    "batch_size": 128,
+    "batch_size": 64,
 
-    "double_dqn_flag": True,
+    "double_dqn_flag": False,
     "target_net_flag": True,
     }
 dqn = DQN(DQN_Parameters)
@@ -83,33 +84,33 @@ frame_count = 0
 
 
 for ep in range(max_episodes):
-    pdb.set_trace()
     #Initial observation of the episode
     obs = env.reset()
     state = np.array(obs[0])
     episode_reward = 0
     for t in range(episode_time_steps):
         frame_count += 1
-        dqn.EpsilonCalc()
-        dqn.RandomAction()
-        
-        
+
+        #Take action based on E-Greedy Policy
+        action = dqn.E_GreedyPolicy(state)
 
         #Apply the action in enviroment
         next_state, reward, done, _, _ = env.step(action)
-        next_state = np.array(next_state)
 
         #Compute episode reward
         episode_reward += reward
 
         #Experience tuple 
-        exp_tuple = (state,action,reward,next_state,done)
+        experience = (state,action,reward,next_state,done)
+
+        #Add experience to Experience Replay
+        dqn.AddToReplay(experience)
 
         #Update state
         state = next_state
-        
-        if frame_count % update_after_actions == 0 and len(Exp_replay) > batch_size:
-            a = 0            
+
+        #Update Policy Net
+        dqn.UpdatePolicyNet(frame_count)            
                 
     # Update running reward to check condition for solving
     episode_count += 1
