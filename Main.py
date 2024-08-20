@@ -1,10 +1,8 @@
 import gymnasium as gym
 import pdb
 import numpy as np
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from DQN import DQN
+import time 
+
 
 print("Libraries Imported") 
 #======================================================
@@ -13,11 +11,22 @@ print("Libraries Imported")
 
 #Initialize Enviroment
 game_name = "LunarLander-v2"
+print("Game enviroment: {}".format(game_name))
 env = gym.make(game_name)
 observation_space = env.observation_space 
 n_actions = env.action_space.n  #Use only for discrete action space
 action_space = tuple([i for i in range(n_actions)])
 status_shape = observation_space.shape
+
+# Framework (torch, tensorflow)
+framework = "torch"
+
+if framework == "torch":
+    from DQN_torch import DQN
+if framework == "tensorflow":
+    from DQN_tensorflow import DQN
+
+print("Framework used: {}".format(framework))
 
 
 # Episodes
@@ -29,7 +38,7 @@ human_render_after_episodes = 500
 
 # DQN Parameter Dictonary
 DQN_Parameters = {
-    "discount_factor": 4,
+    "discount_factor": 0.95,
     "learning_rate": 0.05,
     "n_actions": n_actions,
     "action_space": action_space,
@@ -40,10 +49,10 @@ DQN_Parameters = {
     "epsilon_random_frames": 5000,
 
     "update_policy_net_steps": 4,
-    "update_target_net_steps": 10,
+    "update_target_net_steps": 500,
 
     "experience_replay_length": 100000,
-    "batch_size": 64,
+    "batch_size": 512,
 
     "double_dqn_flag": False,
     "target_net_flag": True,
@@ -59,13 +68,13 @@ status_shape = observation_space.shape
 N_actions = action_space.n
 N_inputs = observation_space.shape[0]
 
+
 # Neural Net Parameters dictionary
 NN_Parameters = {
-    "n_hidden_layer_1": 20,
-    "n_hidden_layer_2": 10,
+    "n_hidden_layer_1": 30,
+    "n_hidden_layer_2": 30,
     "n_hidden_layer_3": 0,
-    "activation_function": "relu", # relu, tanh, sigmoid, leaky_relu  
-    "loss_function": nn.SmoothL1Loss(),
+    "activation_function": "tanh", # relu, tanh, sigmoid, leaky_relu
     }
 
 # Create NNs
@@ -84,10 +93,18 @@ frame_count = 0
 
 
 for ep in range(max_episodes):
+    
     #Initial observation of the episode
     obs = env.reset()
-    state = np.array(obs[0])
+    
+    #Convert to 32bits 
+    state = np.float32(obs[0])
+
+    #Zero the total episode reward
     episode_reward = 0
+
+    #Measure episode time
+    start_time = time.time()
     for t in range(episode_time_steps):
         frame_count += 1
 
@@ -97,6 +114,10 @@ for ep in range(max_episodes):
         #Apply the action in enviroment
         next_state, reward, done, _, _ = env.step(action)
 
+        #Convert to 32bits
+        next_state = np.float32(next_state)
+        reward = np.float32(reward)
+        
         #Compute episode reward
         episode_reward += reward
 
@@ -114,10 +135,22 @@ for ep in range(max_episodes):
 
         #Update Target Net
         dqn.UpdateTargetNet(frame_count)
-                
+
+        if done:
+            break
+
+    #Measure episode end time
+    end_time = time.time()
+    
     # Update running reward to check condition for solving
     episode_count += 1
-    print("Episode {} Reward: {:.3f}".format(episode_count, episode_reward))
+
+    # Log details
+    epsilon = dqn.GetEpsilon()
+    episode_time = end_time - start_time
+    line_temp = "running reward: {:.2f} at episode {}, frame count {}, epsilon {:.3f}, episode_time {:.3f}s"
+    print(line_temp.format(episode_reward, episode_count, frame_count, epsilon, episode_time))
+    
     episode_reward_history.append(episode_reward)
     if len(episode_reward_history) > 100:
         del episode_reward_history[:1]
