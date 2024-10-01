@@ -34,6 +34,8 @@ class DQN:
         self.optimizer = None
         self.update_policy_net_steps = D["update_policy_net_steps"]
         self.update_target_net_steps = D["update_target_net_steps"]
+        #Type of learning flags
+        self.no_target_net_flag = D["no_target_net_flag"]
         self.double_dqn_flag = D["double_dqn_flag"]
         #Replay Experience
         self.experience_replay = []
@@ -154,7 +156,7 @@ class DQN:
             
 
     def UpdateTargetNet(self, frame_count):
-        if frame_count % self.update_target_net_steps == 0:
+        if frame_count % self.update_target_net_steps == 0 and self.no_target_net_flag == False:
             self.target_net.set_weights(self.policy_net.get_weights())
         
 

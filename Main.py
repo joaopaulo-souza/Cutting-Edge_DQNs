@@ -2,7 +2,8 @@ import gymnasium as gym
 import pdb
 import numpy as np
 import time 
-
+from DQN import Agent
+from Utils import plot_learning_curve
 
 print("Libraries Imported") 
 #======================================================
@@ -11,79 +12,39 @@ print("Libraries Imported")
 
 #Initialize Enviroment
 game_name = "LunarLander-v2"
+#game_name = "CartPole-v1"
 print("Game enviroment: {}".format(game_name))
 env = gym.make(game_name)
 observation_space = env.observation_space 
-n_actions = env.action_space.n  #Use only for discrete action space
-action_space = tuple([i for i in range(n_actions)])
-status_shape = observation_space.shape
-
-# Framework (torch, tensorflow)
-framework = "torch"
-
-if framework == "torch":
-    from DQN_torch import DQN
-if framework == "tensorflow":
-    from DQN_tensorflow import DQN
-
-print("Framework used: {}".format(framework))
-
+n_actions = env.action_space.n  
+state_dim = observation_space.shape
 
 # Episodes
 human_render = False
-max_episodes = 5000
+max_episodes = 15000
 episode_solution = 300
 episode_time_steps = 300
+human_render_flag = False
+stop_flag = False
 human_render_after_episodes = 500
+print_after_episodes = 100
 
-# DQN Parameter Dictonary
-DQN_Parameters = {
-    "discount_factor": 0.95,
-    "learning_rate": 0.05,
-    "n_actions": n_actions,
-    "action_space": action_space,
-    "state_shape": observation_space.shape[0],
-    "epsilon_max": 1,
-    "epsilon_min": 0.05,
-    "epsilon_max_exploration_steps": 100000.0,
-    "epsilon_random_frames": 5000,
+double_dqn_flag = True
+dueling_dqn_flag = True
 
-    "update_policy_net_steps": 4,
-    "update_target_net_steps": 500,
+# DQN Parameters
+gamma = 0.99
+lr = 1e-4
+epsilon_dec = 1e-5
 
-    "experience_replay_length": 100000,
-    "batch_size": 512,
+# Object Creation
+dqn_agent = Agent(state_dim, n_actions, lr, gamma, epsilon_dec = epsilon_dec)
 
-    "double_dqn_flag": False,
-    "target_net_flag": True,
-    }
-dqn = DQN(DQN_Parameters)
-
-#Initialize Enviroment
-game_name = "LunarLander-v2"
-env = gym.make(game_name)
-observation_space = env.observation_space
-action_space = env.action_space
-status_shape = observation_space.shape
-N_actions = action_space.n
-N_inputs = observation_space.shape[0]
-
-
-# Neural Net Parameters dictionary
-NN_Parameters = {
-    "n_hidden_layer_1": 30,
-    "n_hidden_layer_2": 30,
-    "n_hidden_layer_3": 0,
-    "activation_function": "tanh", # relu, tanh, sigmoid, leaky_relu
-    }
-
-# Create NNs
-dqn.SetNNParameters(NN_Parameters)
-dqn.CreateQnets()
 
 #Counters and flags
-episode_reward = 0
-episode_reward_history = []
+episode_score = 0
+scores = []
+epsilon_history = []
 episode_count = 0
 frame_count = 0
 
@@ -101,15 +62,18 @@ for ep in range(max_episodes):
     state = np.float32(obs[0])
 
     #Zero the total episode reward
-    episode_reward = 0
+    episode_score = 0
 
     #Measure episode time
     start_time = time.time()
+
+    #while True:
     for t in range(episode_time_steps):
-        frame_count += 1
+        #frame_count +1
+        dqn_agent.IncrementFrame()
 
         #Take action based on E-Greedy Policy
-        action = dqn.E_GreedyPolicy(state)
+        action = dqn_agent.Policy(state)
 
         #Apply the action in enviroment
         next_state, reward, done, _, _ = env.step(action)
@@ -119,22 +83,19 @@ for ep in range(max_episodes):
         reward = np.float32(reward)
         
         #Compute episode reward
-        episode_reward += reward
+        episode_score += reward
 
         #Experience tuple 
         experience = (state,action,reward,next_state,done)
 
         #Add experience to Experience Replay
-        dqn.AddToReplay(experience)
+        dqn_agent.ReplayStore(experience)
 
         #Update state
         state = next_state
 
         #Update Policy Net
-        dqn.UpdatePolicyNet(frame_count)
-
-        #Update Target Net
-        dqn.UpdateTargetNet(frame_count)
+        dqn_agent.Learn()
 
         if done:
             break
@@ -146,30 +107,33 @@ for ep in range(max_episodes):
     episode_count += 1
 
     # Log details
-    epsilon = dqn.GetEpsilon()
+    current_epsilon = dqn_agent.GetEpsilon()
+    epsilon_history.append(current_epsilon)
     episode_time = end_time - start_time
-    line_temp = "running reward: {:.2f} at episode {}, frame count {}, epsilon {:.3f}, episode_time {:.3f}s"
-    print(line_temp.format(episode_reward, episode_count, frame_count, epsilon, episode_time))
-    
-    episode_reward_history.append(episode_reward)
-    if len(episode_reward_history) > 100:
-        del episode_reward_history[:1]
+    scores.append(episode_score)
+    avg_score = np.mean(scores[-100:])
 
-    if episode_reward > episode_solution:  # Condition to consider the task solved
+    if ep % print_after_episodes == 0:
+        line_temp = "score: {:.2f} at episode {}, average score{:.2f}, epsilon {:.3f}, episode_time {:.3f}s"
+        print(line_temp.format(episode_score, episode_count, avg_score, current_epsilon, episode_time))
+    
+    # Stopping Conditionals
+    if episode_score > episode_solution and stop_flag == True:  
         print("Solved at episode {}!".format(episode_count))
         break
 
-    if (episode_count >= max_episodes): # Maximum number of episodes reached
+    if episode_count >= max_episodes: # Maximum number of episodes reached
         print("Stopped at episode {}!".format(episode_count))
         break
+
     # See one episode in render mode
     if human_render == True:
-        human_rendering = False
+        human_render = False
         env.close()
         env = gym.make(game_name)
 
     # Turn off human-rendering 
-    if (episode_count % human_render_after_episodes == 0):
+    if (episode_count % human_render_after_episodes == 0) and human_render_flag == True:
         human_render = True
         env.close()
         env = gym.make(game_name, render_mode="human")
@@ -178,5 +142,25 @@ for ep in range(max_episodes):
         
 #End Enviroment
 env.close()
+#Plot learning curve
 
+#Dueling 
+if dueling_dqn_flag:
+    dueling = "Dueling-"
+else:
+    dueling = ""
+
+#Double
+if double_dqn_flag:
+    double = "Double-"
+else:
+    double = ""
+
+#Algorithm name
+algo = dueling + double
+
+#File name
+filename = game_name + algo + "dqn.png"
+x = [i+1 for i in range(max_episodes)]
+plot_learning_curve(x, scores, epsilon_history, filename)
 

@@ -1,18 +1,9 @@
-import gymnasium as gym
-import pdb
-import numpy as np
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from DQN import DQN
+a = 3
+b = 1
 
-print("Libraries Imported") 
-#======================================================
-# Control Panel
-#======================================================
-m = nn.Softmax(dim=0)
-a = torch.tensor([[1.0,2.0,3.0]])
-b = m(a)
+c = a + b
+if c > 5: 
+    print("O valor de c é maior que 5")
+if c < 5:
+    print("O Tiago é um gostoso")
 
-print(a)
-print(b)
